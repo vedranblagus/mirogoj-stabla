@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="hr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
+    <meta name="googlebot" content="noindex, nofollow">
+    <title>Mirogoj - Evidencija palih stabala</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --primary: #2d6a4f;
+            --primary-dark: #1b4332;
+            --primary-light: #52b788;
+            --danger: #d62828;
+            --warning: #f77f00;
+            --bg: #f8f9fa;
+            --card: #ffffff;
+            --text: #212529;
+            --text-muted: #6c757d;
+            --border: #dee2e6;
+            --shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, var(--primary-dark), var(--primary));
+            color: white; padding: 12px 24px;
+            display: flex; justify-content: space-between; align-items: center;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.2); z-index: 1000; position: relative;
+        }
+        .header h1 { font-size: 1.3rem; font-weight: 600; }
+        .header h1 span { font-weight: 300; opacity: 0.85; font-size: 0.9rem; }
+        .header-actions { display: flex; gap: 10px; align-items: center; }
+        .badge { background: rgba(255,255,255,0.2); padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; }
+
+        /* Buttons */
+        .btn {
+            padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer;
+            font-size: 0.85rem; font-weight: 500; transition: all 0.2s;
+            display: inline-flex; align-items: center; gap: 6px;
+        }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { background: var(--primary-dark); }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-danger:hover { background: #a71e1e; }
+        .btn-outline { background: transparent; color: var(--primary); border: 1.5px solid var(--primary); }
+        .btn-outline:hover { background: var(--primary); color: white; }
+        .btn-white { background: white; color: var(--primary-dark); }
+        .btn-white:hover { background: #e9ecef; }
+        .btn-sm { padding: 5px 10px; font-size: 0.78rem; }
+        .btn-ghost { background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.3); }
+        .btn-ghost:hover { background: rgba(255,255,255,0.25); }
+
+        /* Layout */
+        .main-container { display: flex; height: calc(100vh - 56px); }
+        #map { flex: 1; z-index: 1; }
+        .sidebar {
+            width: 380px; background: var(--card); overflow-y: auto;
+            border-left: 1px solid var(--border); box-shadow: -2px 0 12px rgba(0,0,0,0.05);
+            display: flex; flex-direction: column;
+        }
+        .sidebar-header {
+            padding: 16px; border-bottom: 1px solid var(--border);
+            display: flex; justify-content: space-between; align-items: center;
+            position: sticky; top: 0; background: var(--card); z-index: 10;
+        }
+        .sidebar-header h2 { font-size: 1rem; color: var(--primary-dark); }
+        .sidebar-content { flex: 1; overflow-y: auto; }
+
+        /* Tree list */
+        .tree-item {
+            padding: 14px 16px; border-bottom: 1px solid var(--border);
+            cursor: pointer; transition: background 0.15s;
+        }
+        .tree-item:hover { background: #f0fdf4; }
+        .tree-item.active { background: #d8f3dc; border-left: 3px solid var(--primary); }
+        .tree-item-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; }
+        .tree-item-title { font-weight: 600; font-size: 0.9rem; }
+        .tree-item-date { font-size: 0.72rem; color: var(--text-muted); }
+        .tree-item-meta { display: flex; gap: 12px; font-size: 0.78rem; color: var(--text-muted); }
+        .tree-item-meta .stars { color: var(--warning); }
+        .tree-empty { padding: 40px 20px; text-align: center; color: var(--text-muted); }
+        .tree-empty svg { width: 48px; height: 48px; margin-bottom: 12px; opacity: 0.4; }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5); z-index: 2000;
+            display: flex; justify-content: center; align-items: center;
+            opacity: 0; pointer-events: none; transition: opacity 0.25s;
+        }
+        .modal-overlay.active { opacity: 1; pointer-events: all; }
+        .modal {
+            background: white; border-radius: 12px; width: 520px; max-height: 90vh;
+            overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            transform: translateY(20px); transition: transform 0.25s;
+        }
+        .modal-overlay.active .modal { transform: translateY(0); }
+        .modal-header {
+            padding: 20px 24px; border-bottom: 1px solid var(--border);
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .modal-header h3 { font-size: 1.1rem; color: var(--primary-dark); }
+        .modal-close { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-muted); padding: 4px; }
+        .modal-close:hover { color: var(--text); }
+        .modal-body { padding: 24px; }
+        .modal-footer { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px; }
+
+        /* Form */
+        .form-group { margin-bottom: 18px; }
+        .form-group label { display: block; font-weight: 600; font-size: 0.82rem; margin-bottom: 6px; color: var(--text); }
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%; padding: 10px 12px; border: 1.5px solid var(--border);
+            border-radius: 8px; font-size: 0.9rem; transition: border-color 0.2s;
+            font-family: inherit;
+        }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+            outline: none; border-color: var(--primary);
+        }
+        .form-group textarea { resize: vertical; min-height: 70px; }
+        .form-hint { font-size: 0.72rem; color: var(--text-muted); margin-top: 4px; }
+        .coord-display {
+            background: #f0fdf4; padding: 10px 14px; border-radius: 8px;
+            font-family: 'Courier New', monospace; font-size: 0.85rem;
+            border: 1.5px solid #b7e4c7;
+        }
+
+        /* Stars */
+        .star-rating { display: flex; gap: 4px; }
+        .star-rating .star {
+            font-size: 1.8rem; cursor: pointer; color: #dee2e6;
+            transition: color 0.15s; user-select: none;
+        }
+        .star-rating .star.active { color: var(--warning); }
+        .star-rating .star:hover { color: #fcbf49; }
+        .star-label { display: inline-block; margin-left: 10px; font-size: 0.8rem; color: var(--text-muted); vertical-align: middle; }
+
+        /* Image upload */
+        .image-upload-area {
+            border: 2px dashed var(--border); border-radius: 10px;
+            padding: 24px; text-align: center; cursor: pointer;
+            transition: all 0.2s; background: #fafafa;
+        }
+        .image-upload-area:hover { border-color: var(--primary); background: #f0fdf4; }
+        .image-upload-area.has-image { padding: 8px; }
+        .image-upload-area img { max-width: 100%; max-height: 200px; border-radius: 6px; }
+        .image-upload-area input { display: none; }
+
+        /* Detail view */
+        .detail-panel { padding: 20px; }
+        .detail-panel .detail-image { width: 100%; border-radius: 8px; margin-bottom: 16px; }
+        .detail-panel h3 { margin-bottom: 12px; color: var(--primary-dark); }
+        .detail-field { margin-bottom: 12px; }
+        .detail-field .label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+        .detail-field .value { font-size: 0.92rem; margin-top: 2px; }
+        .detail-actions { display: flex; gap: 8px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
+
+        /* Audit log */
+        .audit-log { padding: 16px; }
+        .audit-entry {
+            padding: 10px 14px; border-left: 3px solid var(--primary-light);
+            margin-bottom: 10px; background: #f8f9fa; border-radius: 0 6px 6px 0;
+            font-size: 0.8rem;
+        }
+        .audit-entry .audit-time { color: var(--text-muted); font-size: 0.72rem; }
+        .audit-entry .audit-action { font-weight: 600; margin-top: 2px; }
+        .audit-entry .audit-detail { color: var(--text-muted); margin-top: 2px; }
+
+        /* Login modal */
+        .login-form { max-width: 300px; margin: 0 auto; }
+
+        /* Tab bar */
+        .tab-bar { display: flex; border-bottom: 2px solid var(--border); padding: 0 16px; background: var(--card); position: sticky; top: 0; z-index: 10; }
+        .tab {
+            padding: 12px 16px; cursor: pointer; font-size: 0.82rem; font-weight: 600;
+            color: var(--text-muted); border-bottom: 2px solid transparent;
+            margin-bottom: -2px; transition: all 0.2s;
+        }
+        .tab:hover { color: var(--text); }
+        .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+        .tab-count {
+            background: var(--primary); color: white; font-size: 0.65rem;
+            padding: 1px 6px; border-radius: 10px; margin-left: 6px;
+        }
+
+        /* Filter */
+        .filter-bar { padding: 10px 16px; border-bottom: 1px solid var(--border); display: flex; gap: 8px; }
+        .filter-bar select { padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 0.78rem; }
+
+        /* Toast */
+        .toast {
+            position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(100px);
+            background: var(--primary-dark); color: white; padding: 12px 24px;
+            border-radius: 8px; font-size: 0.85rem; z-index: 3000;
+            transition: transform 0.3s; box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        .toast.show { transform: translateX(-50%) translateY(0); }
+
+        /* Map markers */
+        .custom-marker {
+            background: var(--danger); width: 14px; height: 14px;
+            border-radius: 50%; border: 2.5px solid white;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        }
+        .custom-marker.selected { background: var(--primary); width: 18px; height: 18px; }
+        .placement-hint {
+            position: absolute; top: 70px; left: 50%; transform: translateX(-50%);
+            background: var(--primary-dark); color: white; padding: 10px 20px;
+            border-radius: 8px; z-index: 1000; font-size: 0.85rem;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.3); pointer-events: none;
+            display: none;
+        }
+        .placement-hint.show { display: block; }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .main-container { flex-direction: column; }
+            .sidebar { width: 100%; height: 50%; border-left: none; border-top: 1px solid var(--border); }
+            #map { height: 50%; }
+        }
+
+        /* Print/export styling for audit */
+        .export-section { padding: 16px; border-top: 1px solid var(--border); }
+
+        /* Crosshair cursor when placing */
+        #map.placing { cursor: crosshair !important; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🌳 Mirogoj - Evidencija palih stabala <span>| Groblje Mirogoj, Zagreb</span></h1>
+        <div class="header-actions">
+            <span class="badge" id="treeCount">0 stabala</span>
+            <button class="btn btn-ghost" id="btnAudit" onclick="showAuditLog()">📋 Evidencija promjena</button>
+            <button class="btn btn-white" id="btnLogin" onclick="showLogin()">🔑 Prijava</button>
+            <button class="btn btn-danger" id="btnLogout" onclick="logout()" style="display:none;">Odjava</button>
+        </div>
+    </div>
+
+    <div class="placement-hint" id="placementHint">📍 Kliknite na kartu za odabir lokacije stabla</div>
+
+    <div class="main-container">
+        <div id="map"></div>
+        <div class="sidebar" id="sidebar">
+            <div class="tab-bar">
+                <div class="tab active" data-tab="list" onclick="switchTab('list')">
+                    Stabla <span class="tab-count" id="tabCount">0</span>
+                </div>
+                <div class="tab" data-tab="detail" onclick="switchTab('detail')">Detalji</div>
+            </div>
+            <div class="filter-bar" id="filterBar">
+                <select id="filterComplexity" onchange="applyFilters()">
+                    <option value="">Sva kompleksnost</option>
+                    <option value="1">⭐ 1</option>
+                    <option value="2">⭐ 2</option>
+                    <option value="3">⭐ 3</option>
+                    <option value="4">⭐ 4</option>
+                    <option value="5">⭐ 5</option>
+                </select>
+                <select id="filterMech" onchange="applyFilters()">
+                    <option value="">Sva mehanizacija</option>
+                    <option value="Ručna pila">Ručna pila</option>
+                    <option value="Motorna pila">Motorna pila</option>
+                    <option value="Dizalica">Dizalica</option>
+                    <option value="Kamion s dizalicom">Kamion s dizalicom</option>
+                    <option value="Autokošara">Autokošara</option>
+                    <option value="Mini bager">Mini bager</option>
+                    <option value="Kombinirano">Kombinirano</option>
+                </select>
+            </div>
+            <div class="sidebar-content" id="sidebarContent">
+                <div id="treeList"></div>
+                <div id="treeDetail" style="display:none;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Modal -->
+    <div class="modal-overlay" id="treeModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="modalTitle">Novo stablo</h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>📍 Lokacija (koordinate)</label>
+                    <div class="coord-display" id="coordDisplay">Nije odabrano</div>
+                    <div class="form-hint">Kliknite na kartu za odabir točne lokacije</div>
+                </div>
+                <div class="form-group">
+                    <label>Naziv / oznaka stabla</label>
+                    <input type="text" id="treeName" placeholder="npr. Hrast #14, Sektor A">
+                </div>
+                <div class="form-group">
+                    <label>Vrsta stabla</label>
+                    <input type="text" id="treeSpecies" placeholder="npr. Hrast, Lipa, Javor...">
+                </div>
+                <div class="form-group">
+                    <label>Opis stanja</label>
+                    <textarea id="treeDescription" placeholder="Opis stanja stabla, oštećenja, opasnosti..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Kompleksnost rušenja</label>
+                    <div style="display: flex; align-items: center;">
+                        <div class="star-rating" id="starRating">
+                            <span class="star" data-value="1" onclick="setRating(1)">★</span>
+                            <span class="star" data-value="2" onclick="setRating(2)">★</span>
+                            <span class="star" data-value="3" onclick="setRating(3)">★</span>
+                            <span class="star" data-value="4" onclick="setRating(4)">★</span>
+                            <span class="star" data-value="5" onclick="setRating(5)">★</span>
+                        </div>
+                        <span class="star-label" id="ratingLabel">Odaberite</span>
+                    </div>
+                    <div class="form-hint">1 = jednostavno, 5 = izrazito kompleksno</div>
+                </div>
+                <div class="form-group">
+                    <label>Potrebna mehanizacija</label>
+                    <select id="treeMech">
+                        <option value="">-- Odaberite --</option>
+                        <option value="Ručna pila">Ručna pila</option>
+                        <option value="Motorna pila">Motorna pila</option>
+                        <option value="Dizalica">Dizalica</option>
+                        <option value="Kamion s dizalicom">Kamion s dizalicom</option>
+                        <option value="Autokošara">Autokošara</option>
+                        <option value="Mini bager">Mini bager</option>
+                        <option value="Kombinirano">Kombinirano</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Dodatne napomene o mehanizaciji</label>
+                    <input type="text" id="treeMechNote" placeholder="npr. potreban pristup sa sjeverne strane">
+                </div>
+                <div class="form-group">
+                    <label>Fotografija</label>
+                    <div class="image-upload-area" id="imageUpload" onclick="document.getElementById('imageInput').click()">
+                        <input type="file" id="imageInput" accept="image/*" onchange="handleImageUpload(event)">
+                        <div id="imagePreview">
+                            <div style="font-size:2rem; margin-bottom:8px;">📷</div>
+                            <div style="color:var(--text-muted); font-size:0.85rem;">Kliknite za odabir slike</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="closeModal()">Odustani</button>
+                <button class="btn btn-primary" onclick="saveTree()">💾 Spremi</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Login Modal -->
+    <div class="modal-overlay" id="loginModal">
+        <div class="modal" style="width:380px;">
+            <div class="modal-header">
+                <h3>🔑 Prijava administratora</h3>
+                <button class="modal-close" onclick="closeLogin()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="login-form">
+                    <div class="form-group">
+                        <label>Korisničko ime</label>
+                        <input type="text" id="loginUser" placeholder="admin">
+                    </div>
+                    <div class="form-group">
+                        <label>Lozinka</label>
+                        <input type="password" id="loginPass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()">
+                    </div>
+                    <div class="form-hint" style="margin-bottom:12px; color: var(--text-muted);">
+                        Zadane postavke: admin / mirogoj2026
+                    </div>
+                    <button class="btn btn-primary" style="width:100%;" onclick="doLogin()">Prijava</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Audit Log Modal -->
+    <div class="modal-overlay" id="auditModal">
+        <div class="modal" style="width:600px;">
+            <div class="modal-header">
+                <h3>📋 Evidencija svih promjena (Traceability)</h3>
+                <button class="modal-close" onclick="closeAuditModal()">&times;</button>
+            </div>
+            <div class="modal-body" style="max-height:60vh; overflow-y:auto;">
+                <div id="auditLogContent"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="exportAudit()">📥 Izvezi CSV</button>
+                <button class="btn btn-primary" onclick="closeAuditModal()">Zatvori</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+<script>
+// ==================== STATE ====================
+let trees = JSON.parse(localStorage.getItem('mirogoj_trees') || '[]');
+let auditLog = JSON.parse(localStorage.getItem('mirogoj_audit') || '[]');
+let isLoggedIn = false;
+let currentUser = null;
+let selectedTreeId = null;
+let editingTreeId = null;
+let placingMode = false;
+let tempLatLng = null;
+let currentRating = 0;
+let currentImage = null;
+let markers = {};
+
+// Admin credentials (in production, use a proper backend!)
+const ADMIN_USER = 'admin';
+const ADMIN_PASS = 'mirogoj2026';
+
+const RATING_LABELS = ['', 'Jednostavno', 'Niska kompleksnost', 'Srednja kompleksnost', 'Visoka kompleksnost', 'Izrazito kompleksno'];
+
+// ==================== MAP INIT ====================
+const map = L.map('map', { zoomControl: true }).setView([45.8275, 15.9870], 17);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 22,
+    attribution: '© OpenStreetMap contributors'
+}).addTo(map);
+
+// Add satellite layer option
+const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    maxZoom: 22,
+    attribution: '© Esri'
+});
+
+const baseMaps = {
+    "Karta": L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 22 }),
+    "Satelit": satellite
+};
+L.control.layers(baseMaps).addTo(map);
+
+// Mirogoj cemetery boundary hint
+L.marker([45.8275, 15.9870], {
+    icon: L.divIcon({ className: '', html: '<div style="background:var(--primary);color:white;padding:4px 10px;border-radius:6px;font-size:0.75rem;white-space:nowrap;font-weight:600;box-shadow:0 2px 6px rgba(0,0,0,0.2);">Groblje Mirogoj</div>', iconSize: [0, 0], iconAnchor: [-10, 20] })
+}).addTo(map);
+
+// Map click handler
+map.on('click', function(e) {
+    if (!placingMode) return;
+    tempLatLng = e.latlng;
+    document.getElementById('coordDisplay').textContent = `${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)}`;
+
+    // Show temp marker
+    if (window._tempMarker) map.removeLayer(window._tempMarker);
+    window._tempMarker = L.marker(e.latlng, {
+        icon: L.divIcon({ className: 'custom-marker selected', iconSize: [18, 18], iconAnchor: [9, 9] })
+    }).addTo(map);
+});
+
+// ==================== AUTH ====================
+function showLogin() {
+    document.getElementById('loginModal').classList.add('active');
+    document.getElementById('loginUser').focus();
+}
+function closeLogin() {
+    document.getElementById('loginModal').classList.remove('active');
+}
+function doLogin() {
+    const user = document.getElementById('loginUser').value;
+    const pass = document.getElementById('loginPass').value;
+    if (user === ADMIN_USER && pass === ADMIN_PASS) {
+        isLoggedIn = true;
+        currentUser = user;
+        closeLogin();
+        document.getElementById('btnLogin').style.display = 'none';
+        document.getElementById('btnLogout').style.display = '';
+        addAuditEntry('LOGIN', null, 'Korisnik se prijavio');
+        showToast('Uspješno ste prijavljeni kao administrator');
+        renderTreeList();
+    } else {
+        showToast('Pogrešno korisničko ime ili lozinka!');
+    }
+}
+function logout() {
+    addAuditEntry('LOGOUT', null, 'Korisnik se odjavio');
+    isLoggedIn = false;
+    currentUser = null;
+    document.getElementById('btnLogin').style.display = '';
+    document.getElementById('btnLogout').style.display = 'none';
+    showToast('Odjavili ste se');
+    renderTreeList();
+    if (selectedTreeId) showDetail(selectedTreeId);
+}
+
+// ==================== TREE CRUD ====================
+function generateId() { return 'tree_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9); }
+
+function openAddModal() {
+    if (!isLoggedIn) { showToast('Morate biti prijavljeni!'); return; }
+    editingTreeId = null;
+    document.getElementById('modalTitle').textContent = 'Novo stablo';
+    document.getElementById('treeName').value = '';
+    document.getElementById('treeSpecies').value = '';
+    document.getElementById('treeDescription').value = '';
+    document.getElementById('treeMech').value = '';
+    document.getElementById('treeMechNote').value = '';
+    document.getElementById('coordDisplay').textContent = 'Kliknite na kartu za odabir lokacije';
+    setRating(0);
+    currentImage = null;
+    document.getElementById('imagePreview').innerHTML = '<div style="font-size:2rem;margin-bottom:8px;">📷</div><div style="color:var(--text-muted);font-size:0.85rem;">Kliknite za odabir slike</div>';
+    document.getElementById('imageUpload').classList.remove('has-image');
+    tempLatLng = null;
+
+    placingMode = true;
+    document.getElementById('map').classList.add('placing');
+    document.getElementById('placementHint').classList.add('show');
+    document.getElementById('treeModal').classList.add('active');
+}
+
+function openEditModal(id) {
+    if (!isLoggedIn) { showToast('Morate biti prijavljeni!'); return; }
+    const tree = trees.find(t => t.id === id);
+    if (!tree) return;
+
+    editingTreeId = id;
+    document.getElementById('modalTitle').textContent = 'Uredi stablo';
+    document.getElementById('treeName').value = tree.name || '';
+    document.getElementById('treeSpecies').value = tree.species || '';
+    document.getElementById('treeDescription').value = tree.description || '';
+    document.getElementById('treeMech').value = tree.mechanization || '';
+    document.getElementById('treeMechNote').value = tree.mechNote || '';
+    document.getElementById('coordDisplay').textContent = `${tree.lat.toFixed(6)}, ${tree.lng.toFixed(6)}`;
+    setRating(tree.complexity || 0);
+    tempLatLng = L.latLng(tree.lat, tree.lng);
+
+    if (tree.image) {
+        currentImage = tree.image;
+        document.getElementById('imagePreview').innerHTML = `<img src="${tree.image}" alt="Stablo">`;
+        document.getElementById('imageUpload').classList.add('has-image');
+    } else {
+        currentImage = null;
+        document.getElementById('imagePreview').innerHTML = '<div style="font-size:2rem;margin-bottom:8px;">📷</div><div style="color:var(--text-muted);font-size:0.85rem;">Kliknite za odabir slike</div>';
+        document.getElementById('imageUpload').classList.remove('has-image');
+    }
+
+    placingMode = true;
+    document.getElementById('map').classList.add('placing');
+    document.getElementById('placementHint').classList.add('show');
+    document.getElementById('treeModal').classList.add('active');
+}
+
+function closeModal() {
+    document.getElementById('treeModal').classList.remove('active');
+    placingMode = false;
+    document.getElementById('map').classList.remove('placing');
+    document.getElementById('placementHint').classList.remove('show');
+    if (window._tempMarker) { map.removeLayer(window._tempMarker); window._tempMarker = null; }
+}
+
+function saveTree() {
+    if (!tempLatLng) { showToast('Morate odabrati lokaciju na karti!'); return; }
+    const name = document.getElementById('treeName').value.trim();
+    if (!name) { showToast('Unesite naziv stabla!'); return; }
+    if (currentRating === 0) { showToast('Odaberite kompleksnost rušenja!'); return; }
+    if (!document.getElementById('treeMech').value) { showToast('Odaberite potrebnu mehanizaciju!'); return; }
+
+    const treeData = {
+        name: name,
+        species: document.getElementById('treeSpecies').value.trim(),
+        description: document.getElementById('treeDescription').value.trim(),
+        lat: tempLatLng.lat,
+        lng: tempLatLng.lng,
+        complexity: currentRating,
+        mechanization: document.getElementById('treeMech').value,
+        mechNote: document.getElementById('treeMechNote').value.trim(),
+        image: currentImage,
+        updatedAt: new Date().toISOString(),
+        updatedBy: currentUser
+    };
+
+    if (editingTreeId) {
+        // Edit existing
+        const idx = trees.findIndex(t => t.id === editingTreeId);
+        if (idx !== -1) {
+            const oldTree = { ...trees[idx] };
+            trees[idx] = { ...trees[idx], ...treeData };
+            addAuditEntry('UPDATE', editingTreeId, `Ažurirano stablo "${name}"`, buildDiffLog(oldTree, treeData));
+            showToast('Stablo uspješno ažurirano');
+        }
+    } else {
+        // New tree
+        const newTree = {
+            id: generateId(),
+            ...treeData,
+            createdAt: new Date().toISOString(),
+            createdBy: currentUser
+        };
+        trees.push(newTree);
+        addAuditEntry('CREATE', newTree.id, `Dodano novo stablo "${name}"`);
+        showToast('Stablo uspješno dodano');
+    }
+
+    saveTrees();
+    closeModal();
+    renderAll();
+}
+
+function deleteTree(id) {
+    if (!isLoggedIn) return;
+    const tree = trees.find(t => t.id === id);
+    if (!tree) return;
+    if (!confirm(`Jeste li sigurni da želite obrisati "${tree.name}"?`)) return;
+
+    trees = trees.filter(t => t.id !== id);
+    addAuditEntry('DELETE', id, `Obrisano stablo "${tree.name}"`);
+    saveTrees();
+    selectedTreeId = null;
+    switchTab('list');
+    renderAll();
+    showToast('Stablo obrisano');
+}
+
+function buildDiffLog(oldTree, newData) {
+    const changes = [];
+    const fields = { name: 'Naziv', species: 'Vrsta', description: 'Opis', complexity: 'Kompleksnost', mechanization: 'Mehanizacija', mechNote: 'Napomena meh.', lat: 'Lat', lng: 'Lng' };
+    for (const [key, label] of Object.entries(fields)) {
+        if (oldTree[key] !== newData[key]) {
+            changes.push(`${label}: "${oldTree[key] || '-'}" → "${newData[key] || '-'}"`);
+        }
+    }
+    if (oldTree.image !== newData.image) changes.push('Fotografija promijenjena');
+    return changes.join('; ') || 'Nema vidljivih promjena';
+}
+
+// ==================== RATING ====================
+function setRating(val) {
+    currentRating = val;
+    document.querySelectorAll('#starRating .star').forEach(s => {
+        s.classList.toggle('active', parseInt(s.dataset.value) <= val);
+    });
+    document.getElementById('ratingLabel').textContent = RATING_LABELS[val] || 'Odaberite';
+}
+
+// ==================== IMAGE ====================
+function handleImageUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { showToast('Slika ne smije biti veća od 5MB!'); return; }
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        currentImage = e.target.result;
+        document.getElementById('imagePreview').innerHTML = `<img src="${currentImage}" alt="Preview">`;
+        document.getElementById('imageUpload').classList.add('has-image');
+    };
+    reader.readAsDataURL(file);
+}
+
+// ==================== RENDER ====================
+function renderAll() {
+    renderMarkers();
+    renderTreeList();
+    updateCounts();
+}
+
+function renderMarkers() {
+    Object.values(markers).forEach(m => map.removeLayer(m));
+    markers = {};
+    trees.forEach(tree => {
+        const isSelected = tree.id === selectedTreeId;
+        const marker = L.marker([tree.lat, tree.lng], {
+            icon: L.divIcon({
+                className: `custom-marker${isSelected ? ' selected' : ''}`,
+                iconSize: isSelected ? [18, 18] : [14, 14],
+                iconAnchor: isSelected ? [9, 9] : [7, 7]
+            })
+        }).addTo(map);
+        marker.bindTooltip(`<strong>${tree.name}</strong><br>${'⭐'.repeat(tree.complexity)} - ${tree.mechanization}`, { direction: 'top', offset: [0, -10] });
+        marker.on('click', () => { showDetail(tree.id); });
+        markers[tree.id] = marker;
+    });
+}
+
+function renderTreeList() {
+    const container = document.getElementById('treeList');
+    const filtered = getFilteredTrees();
+
+    if (filtered.length === 0) {
+        container.innerHTML = `
+            <div class="tree-empty">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2L8 8h8L12 2z"/><path d="M7 8L3 15h18L17 8H7z"/><path d="M5 15L2 21h20l-3-6H5z"/><rect x="10" y="21" width="4" height="3"/></svg>
+                <p>Nema unesenih stabala</p>
+                ${isLoggedIn ? '<p style="font-size:0.8rem; margin-top:8px;">Kliknite "Dodaj stablo" za početak</p>' : '<p style="font-size:0.8rem; margin-top:8px;">Prijavite se za unos stabala</p>'}
+            </div>`;
+        return;
+    }
+
+    container.innerHTML = filtered.map(tree => `
+        <div class="tree-item ${tree.id === selectedTreeId ? 'active' : ''}" onclick="showDetail('${tree.id}')">
+            <div class="tree-item-header">
+                <span class="tree-item-title">${escHtml(tree.name)}</span>
+                <span class="tree-item-date">${formatDate(tree.createdAt)}</span>
+            </div>
+            <div class="tree-item-meta">
+                <span class="stars">${'★'.repeat(tree.complexity)}${'☆'.repeat(5 - tree.complexity)}</span>
+                <span>🔧 ${escHtml(tree.mechanization)}</span>
+                ${tree.species ? `<span>🌿 ${escHtml(tree.species)}</span>` : ''}
+            </div>
+        </div>
+    `).join('');
+
+    // Add "new" button at top if logged in
+    if (isLoggedIn) {
+        container.insertAdjacentHTML('afterbegin', `
+            <div style="padding:12px 16px; border-bottom:1px solid var(--border);">
+                <button class="btn btn-primary" style="width:100%;" onclick="openAddModal()">+ Dodaj novo stablo</button>
+            </div>`);
+    }
+}
+
+function showDetail(id) {
+    selectedTreeId = id;
+    const tree = trees.find(t => t.id === id);
+    if (!tree) return;
+
+    switchTab('detail');
+    renderMarkers(); // Update marker highlights
+    map.panTo([tree.lat, tree.lng]);
+
+    const treeAudit = auditLog.filter(a => a.treeId === id).reverse();
+
+    document.getElementById('treeDetail').innerHTML = `
+        <div class="detail-panel">
+            ${tree.image ? `<img class="detail-image" src="${tree.image}" alt="${escHtml(tree.name)}">` : ''}
+            <h3>${escHtml(tree.name)}</h3>
+            ${tree.species ? `<div class="detail-field"><span class="label">VRSTA STABLA</span><div class="value">🌿 ${escHtml(tree.species)}</div></div>` : ''}
+            <div class="detail-field">
+                <span class="label">LOKACIJA</span>
+                <div class="value" style="font-family:monospace;">📍 ${tree.lat.toFixed(6)}, ${tree.lng.toFixed(6)}</div>
+            </div>
+            <div class="detail-field">
+                <span class="label">KOMPLEKSNOST RUŠENJA</span>
+                <div class="value" style="color:var(--warning); font-size:1.2rem;">
+                    ${'★'.repeat(tree.complexity)}${'☆'.repeat(5 - tree.complexity)}
+                    <span style="font-size:0.85rem; color:var(--text); margin-left:8px;">${RATING_LABELS[tree.complexity]}</span>
+                </div>
+            </div>
+            <div class="detail-field">
+                <span class="label">POTREBNA MEHANIZACIJA</span>
+                <div class="value">🔧 ${escHtml(tree.mechanization)}</div>
+                ${tree.mechNote ? `<div class="value" style="font-size:0.82rem; color:var(--text-muted); margin-top:2px;">ℹ️ ${escHtml(tree.mechNote)}</div>` : ''}
+            </div>
+            ${tree.description ? `<div class="detail-field"><span class="label">OPIS STANJA</span><div class="value">${escHtml(tree.description)}</div></div>` : ''}
+            <div class="detail-field">
+                <span class="label">EVIDENCIJA</span>
+                <div class="value" style="font-size:0.8rem; color:var(--text-muted);">
+                    Kreirano: ${formatDateTime(tree.createdAt)} (${tree.createdBy || '-'})<br>
+                    Zadnja izmjena: ${formatDateTime(tree.updatedAt)} (${tree.updatedBy || '-'})
+                </div>
+            </div>
+            ${isLoggedIn ? `
+                <div class="detail-actions">
+                    <button class="btn btn-outline btn-sm" onclick="openEditModal('${tree.id}')">✏️ Uredi</button>
+                    <button class="btn btn-danger btn-sm" onclick="deleteTree('${tree.id}')">🗑️ Obriši</button>
+                </div>
+            ` : ''}
+            ${treeAudit.length > 0 ? `
+                <div style="margin-top:20px; padding-top:16px; border-top:1px solid var(--border);">
+                    <span class="label">POVIJEST PROMJENA</span>
+                    ${treeAudit.map(a => `
+                        <div class="audit-entry" style="margin-top:8px;">
+                            <div class="audit-time">${formatDateTime(a.timestamp)}</div>
+                            <div class="audit-action">${escHtml(a.action)} — ${escHtml(a.user || 'sustav')}</div>
+                            ${a.details ? `<div class="audit-detail">${escHtml(a.details)}</div>` : ''}
+                        </div>
+                    `).join('')}
+                </div>
+            ` : ''}
+        </div>`;
+
+    renderTreeList(); // Highlight active item
+}
+
+function getFilteredTrees() {
+    let filtered = [...trees];
+    const fc = document.getElementById('filterComplexity').value;
+    const fm = document.getElementById('filterMech').value;
+    if (fc) filtered = filtered.filter(t => t.complexity === parseInt(fc));
+    if (fm) filtered = filtered.filter(t => t.mechanization === fm);
+    return filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+}
+
+function applyFilters() { renderTreeList(); }
+
+function updateCounts() {
+    document.getElementById('treeCount').textContent = `${trees.length} stabala`;
+    document.getElementById('tabCount').textContent = trees.length;
+}
+
+// ==================== TABS ====================
+function switchTab(tab) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+    document.getElementById('treeList').style.display = tab === 'list' ? '' : 'none';
+    document.getElementById('treeDetail').style.display = tab === 'detail' ? '' : 'none';
+    document.getElementById('filterBar').style.display = tab === 'list' ? '' : 'none';
+}
+
+// ==================== AUDIT ====================
+function addAuditEntry(action, treeId, description, details) {
+    auditLog.push({
+        id: 'audit_' + Date.now(),
+        timestamp: new Date().toISOString(),
+        action,
+        treeId,
+        user: currentUser,
+        description,
+        details: details || null
+    });
+    localStorage.setItem('mirogoj_audit', JSON.stringify(auditLog));
+}
+
+function showAuditLog() {
+    const container = document.getElementById('auditLogContent');
+    const sorted = [...auditLog].reverse();
+    if (sorted.length === 0) {
+        container.innerHTML = '<p style="text-align:center; color:var(--text-muted);">Nema zabilježenih promjena</p>';
+    } else {
+        container.innerHTML = sorted.map(a => `
+            <div class="audit-entry">
+                <div class="audit-time">${formatDateTime(a.timestamp)}</div>
+                <div class="audit-action">${escHtml(a.action)} — ${escHtml(a.description)}</div>
+                <div class="audit-detail">Korisnik: ${escHtml(a.user || 'sustav')}${a.treeId ? ` | ID: ${a.treeId}` : ''}</div>
+                ${a.details ? `<div class="audit-detail" style="margin-top:4px; font-style:italic;">${escHtml(a.details)}</div>` : ''}
+            </div>
+        `).join('');
+    }
+    document.getElementById('auditModal').classList.add('active');
+}
+
+function closeAuditModal() {
+    document.getElementById('auditModal').classList.remove('active');
+}
+
+function exportAudit() {
+    const header = 'Datum,Akcija,Opis,Korisnik,ID Stabla,Detalji\n';
+    const rows = auditLog.map(a =>
+        `"${a.timestamp}","${a.action}","${(a.description || '').replace(/"/g, '""')}","${a.user || ''}","${a.treeId || ''}","${(a.details || '').replace(/"/g, '""')}"`
+    ).join('\n');
+    const blob = new Blob(['\uFEFF' + header + rows], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `mirogoj_audit_${new Date().toISOString().slice(0,10)}.csv`;
+    link.click();
+    showToast('Audit log izvezen kao CSV');
+}
+
+// ==================== STORAGE ====================
+function saveTrees() {
+    localStorage.setItem('mirogoj_trees', JSON.stringify(trees));
+}
+
+// ==================== HELPERS ====================
+function escHtml(str) {
+    if (!str) return '';
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function formatDate(iso) {
+    if (!iso) return '-';
+    const d = new Date(iso);
+    return d.toLocaleDateString('hr-HR');
+}
+function formatDateTime(iso) {
+    if (!iso) return '-';
+    const d = new Date(iso);
+    return d.toLocaleDateString('hr-HR') + ' ' + d.toLocaleTimeString('hr-HR', { hour: '2-digit', minute: '2-digit' });
+}
+function showToast(msg) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+// ==================== INIT ====================
+renderAll();
+</script>
+</body>
+</html>
