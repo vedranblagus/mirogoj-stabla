@@ -150,8 +150,8 @@
         .tab:hover { color: var(--text); }
         .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
         .tab-count { background: var(--primary); color: white; font-size: 0.65rem; padding: 1px 6px; border-radius: 10px; margin-left: 6px; }
-        .filter-bar { padding: 10px 16px; border-bottom: 1px solid var(--border); display: flex; gap: 8px; }
-        .filter-bar select { padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 0.78rem; }
+        .filter-bar { padding: 10px 16px; border-bottom: 1px solid var(--border); display: flex; gap: 6px; flex-wrap: wrap; }
+        .filter-bar select { padding: 5px 6px; border: 1px solid var(--border); border-radius: 6px; font-size: 0.75rem; flex: 1; min-width: 0; }
         .toast {
             position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(100px);
             background: var(--primary-dark); color: white; padding: 12px 24px;
@@ -164,6 +164,9 @@
             border-radius: 50%; border: 2.5px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.3);
         }
         .custom-marker.selected { background: var(--primary); width: 18px; height: 18px; }
+        .custom-marker.status-uneseno { background: #6c757d; }
+        .custom-marker.status-uprocesu { background: #f77f00; }
+        .custom-marker.status-rijeseno { background: #2d6a4f; }
         .placement-hint {
             position: absolute; top: 70px; left: 50%; transform: translateX(-50%);
             background: var(--primary-dark); color: white; padding: 10px 20px;
@@ -219,10 +222,15 @@
                 </select>
                 <select id="filterMech" onchange="applyFilters()">
                     <option value="">Sva mehanizacija</option>
-                    <option value="Rucna pila">Rucna pila</option><option value="Motorna pila">Motorna pila</option>
+                    <option value="Ručna pila">Ručna pila</option><option value="Motorna pila">Motorna pila</option>
                     <option value="Dizalica">Dizalica</option><option value="Kamion s dizalicom">Kamion s dizalicom</option>
-                    <option value="Autokosara">Autokosara</option><option value="Mini bager">Mini bager</option>
-                    <option value="Kombinirano">Kombinirano</option>
+                    <option value="Autokošara">Autokošara</option><option value="Mini bager">Mini bager</option>
+                </select>
+                <select id="filterStatus" onchange="applyFilters()">
+                    <option value="">Svi statusi</option>
+                    <option value="Uneseno">Uneseno</option>
+                    <option value="U procesu">U procesu</option>
+                    <option value="Riješeno">Riješeno</option>
                 </select>
             </div>
             <div class="sidebar-content" id="sidebarContent">
@@ -272,18 +280,27 @@
                     <div class="form-hint">1 = jednostavno, 5 = izrazito kompleksno</div>
                 </div>
                 <div class="form-group">
-                    <label>Potrebna mehanizacija</label>
-                    <select id="treeMech">
-                        <option value="">-- Odaberite --</option>
-                        <option value="Rucna pila">Rucna pila</option><option value="Motorna pila">Motorna pila</option>
-                        <option value="Dizalica">Dizalica</option><option value="Kamion s dizalicom">Kamion s dizalicom</option>
-                        <option value="Autokosara">Autokosara</option><option value="Mini bager">Mini bager</option>
-                        <option value="Kombinirano">Kombinirano</option>
-                    </select>
+                    <label>Potrebna mehanizacija (odaberite jednu ili više)</label>
+                    <div id="treeMechCheckboxes" style="display:grid;grid-template-columns:1fr 1fr;gap:6px 16px;margin-top:4px;">
+                        <label style="font-weight:normal;font-size:0.85rem;display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" value="Ručna pila" class="mech-cb"> Ručna pila</label>
+                        <label style="font-weight:normal;font-size:0.85rem;display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" value="Motorna pila" class="mech-cb"> Motorna pila</label>
+                        <label style="font-weight:normal;font-size:0.85rem;display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" value="Dizalica" class="mech-cb"> Dizalica</label>
+                        <label style="font-weight:normal;font-size:0.85rem;display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" value="Kamion s dizalicom" class="mech-cb"> Kamion s dizalicom</label>
+                        <label style="font-weight:normal;font-size:0.85rem;display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" value="Autokošara" class="mech-cb"> Autokošara</label>
+                        <label style="font-weight:normal;font-size:0.85rem;display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" value="Mini bager" class="mech-cb"> Mini bager</label>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label>Dodatne napomene o mehanizaciji</label>
                     <input type="text" id="treeMechNote" placeholder="npr. potreban pristup sa sjeverne strane">
+                </div>
+                <div class="form-group">
+                    <label>Status</label>
+                    <select id="treeStatus">
+                        <option value="Uneseno">Uneseno</option>
+                        <option value="U procesu">U procesu</option>
+                        <option value="Riješeno">Riješeno</option>
+                    </select>
                 </div>
                 <div class="form-group">
                     <label>Fotografija</label>
@@ -313,8 +330,8 @@
             <div class="modal-body">
                 <div class="login-form">
                     <div class="form-group">
-                        <label>Email</label>
-                        <input type="email" id="loginEmail" placeholder="admin@mirogoj.hr">
+                        <label>Korisničko ime</label>
+                        <input type="text" id="loginEmail" placeholder="admin">
                     </div>
                     <div class="form-group">
                         <label>Lozinka</label>
@@ -447,9 +464,10 @@ function showLogin() {
 function closeLogin() { document.getElementById('loginModal').classList.remove('active'); }
 
 async function doLogin() {
-    const email = document.getElementById('loginEmail').value.trim();
+    let email = document.getElementById('loginEmail').value.trim();
     const pass = document.getElementById('loginPass').value;
-    if (!email || !pass) { showLoginError('Unesite email i lozinku'); return; }
+    if (!email || !pass) { showLoginError('Unesite korisničko ime i lozinku'); return; }
+    if (!email.includes('@')) { email = email + '@mirogoj-stabla.hr'; }
 
     if (!firebaseReady) { showLoginError('Firebase nije konfiguriran'); return; }
 
@@ -514,8 +532,9 @@ function openAddModal() {
     document.getElementById('treeName').value = '';
     document.getElementById('treeSpecies').value = '';
     document.getElementById('treeDescription').value = '';
-    document.getElementById('treeMech').value = '';
+    document.querySelectorAll('.mech-cb').forEach(function(cb) { cb.checked = false; });
     document.getElementById('treeMechNote').value = '';
+    document.getElementById('treeStatus').value = 'Uneseno';
     document.getElementById('coordDisplay').textContent = 'Kliknite na kartu za odabir lokacije';
     setRating(0);
     currentImage = null;
@@ -538,8 +557,10 @@ function openEditModal(id) {
     document.getElementById('treeName').value = tree.name || '';
     document.getElementById('treeSpecies').value = tree.species || '';
     document.getElementById('treeDescription').value = tree.description || '';
-    document.getElementById('treeMech').value = tree.mechanization || '';
+    var mechArr = Array.isArray(tree.mechanization) ? tree.mechanization : (tree.mechanization ? [tree.mechanization] : []);
+    document.querySelectorAll('.mech-cb').forEach(function(cb) { cb.checked = mechArr.indexOf(cb.value) !== -1; });
     document.getElementById('treeMechNote').value = tree.mechNote || '';
+    document.getElementById('treeStatus').value = tree.status || 'Uneseno';
     document.getElementById('coordDisplay').textContent = tree.lat.toFixed(6) + ', ' + tree.lng.toFixed(6);
     setRating(tree.complexity || 0);
     tempLatLng = L.latLng(tree.lat, tree.lng);
@@ -573,7 +594,9 @@ async function saveTree() {
     var name = document.getElementById('treeName').value.trim();
     if (!name) { showToast('Unesite naziv stabla!'); return; }
     if (currentRating === 0) { showToast('Odaberite kompleksnost rusenja!'); return; }
-    if (!document.getElementById('treeMech').value) { showToast('Odaberite potrebnu mehanizaciju!'); return; }
+    var selectedMech = [];
+    document.querySelectorAll('.mech-cb:checked').forEach(function(cb) { selectedMech.push(cb.value); });
+    if (selectedMech.length === 0) { showToast('Odaberite barem jednu mehanizaciju!'); return; }
 
     var treeData = {
         name: name,
@@ -582,8 +605,9 @@ async function saveTree() {
         lat: tempLatLng.lat,
         lng: tempLatLng.lng,
         complexity: currentRating,
-        mechanization: document.getElementById('treeMech').value,
+        mechanization: selectedMech,
         mechNote: document.getElementById('treeMechNote').value.trim(),
+        status: document.getElementById('treeStatus').value,
         image: currentImage || null,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
         updatedBy: currentUser
@@ -717,14 +741,16 @@ function renderMarkers() {
     markers = {};
     trees.forEach(function(tree) {
         var isSel = tree.id === selectedTreeId;
+        var statusClass = {'Uneseno':' status-uneseno','U procesu':' status-uprocesu','Riješeno':' status-rijeseno'}[tree.status] || ' status-uneseno';
         var marker = L.marker([tree.lat, tree.lng], {
             icon: L.divIcon({
-                className: 'custom-marker' + (isSel ? ' selected' : ''),
+                className: 'custom-marker' + (isSel ? ' selected' : '') + statusClass,
                 iconSize: isSel ? [18, 18] : [14, 14],
                 iconAnchor: isSel ? [9, 9] : [7, 7]
             })
         }).addTo(map);
-        marker.bindTooltip('<strong>' + esc(tree.name) + '</strong><br>' + '\u2B50'.repeat(tree.complexity) + ' - ' + esc(tree.mechanization), { direction: 'top', offset: [0, -10] });
+        var mechStr = Array.isArray(tree.mechanization) ? tree.mechanization.join(', ') : (tree.mechanization || '');
+        marker.bindTooltip('<strong>' + esc(tree.name) + '</strong><br>' + '\u2B50'.repeat(tree.complexity) + ' - ' + esc(mechStr), { direction: 'top', offset: [0, -10] });
         marker.on('click', function() { showDetail(tree.id); });
         markers[tree.id] = marker;
     });
@@ -740,10 +766,13 @@ function renderTreeList() {
     } else {
         container.innerHTML = filtered.map(function(tree) {
             var dateStr = tree.createdAt ? formatDate(tree.createdAt.toDate ? tree.createdAt.toDate() : new Date(tree.createdAt)) : '-';
+            var mechDisplay = Array.isArray(tree.mechanization) ? tree.mechanization.join(', ') : (tree.mechanization || '');
+            var statusColors = {'Uneseno': '#6c757d', 'U procesu': '#f77f00', 'Riješeno': '#2d6a4f'};
+            var statusColor = statusColors[tree.status] || '#6c757d';
             return '<div class="tree-item ' + (tree.id === selectedTreeId ? 'active' : '') + '" onclick="showDetail(\'' + tree.id + '\')">' +
-                '<div class="tree-item-header"><span class="tree-item-title">' + esc(tree.name) + '</span><span class="tree-item-date">' + dateStr + '</span></div>' +
+                '<div class="tree-item-header"><span class="tree-item-title">' + esc(tree.name) + '</span><span style="background:' + statusColor + ';color:white;padding:2px 8px;border-radius:10px;font-size:0.7rem;">' + esc(tree.status || 'Uneseno') + '</span></div>' +
                 '<div class="tree-item-meta"><span class="stars">' + '\u2605'.repeat(tree.complexity) + '\u2606'.repeat(5 - tree.complexity) + '</span>' +
-                '<span>\uD83D\uDD27 ' + esc(tree.mechanization) + '</span>' +
+                '<span>\uD83D\uDD27 ' + esc(mechDisplay) + '</span>' +
                 (tree.species ? '<span>\uD83C\uDF3F ' + esc(tree.species) + '</span>' : '') +
                 '</div></div>';
         }).join('');
@@ -773,7 +802,8 @@ function showDetail(id) {
         '<div class="detail-field"><span class="label">KOMPLEKSNOST RUSENJA</span><div class="value" style="color:var(--warning);font-size:1.2rem;">' +
             '\u2605'.repeat(tree.complexity) + '\u2606'.repeat(5 - tree.complexity) +
             '<span style="font-size:0.85rem;color:var(--text);margin-left:8px;">' + RATING_LABELS[tree.complexity] + '</span></div></div>' +
-        '<div class="detail-field"><span class="label">POTREBNA MEHANIZACIJA</span><div class="value">\uD83D\uDD27 ' + esc(tree.mechanization) + '</div>' +
+        '<div class="detail-field"><span class="label">STATUS</span><div class="value"><span style="background:' + ({'Uneseno':'#6c757d','U procesu':'#f77f00','Riješeno':'#2d6a4f'}[tree.status] || '#6c757d') + ';color:white;padding:3px 12px;border-radius:12px;font-size:0.85rem;">' + esc(tree.status || 'Uneseno') + '</span></div></div>' +
+        '<div class="detail-field"><span class="label">POTREBNA MEHANIZACIJA</span><div class="value">\uD83D\uDD27 ' + esc(Array.isArray(tree.mechanization) ? tree.mechanization.join(', ') : (tree.mechanization || '')) + '</div>' +
             (tree.mechNote ? '<div class="value" style="font-size:0.82rem;color:var(--text-muted);margin-top:2px;">\u2139\uFE0F ' + esc(tree.mechNote) + '</div>' : '') + '</div>' +
         (tree.description ? '<div class="detail-field"><span class="label">OPIS STANJA</span><div class="value">' + esc(tree.description) + '</div></div>' : '') +
         '<div class="detail-field"><span class="label">EVIDENCIJA</span><div class="value" style="font-size:0.8rem;color:var(--text-muted);">Kreirano: ' + createdDate + ' (' + esc(tree.createdBy || '-') + ')<br>Zadnja izmjena: ' + updatedDate + ' (' + esc(tree.updatedBy || '-') + ')</div></div>' +
@@ -791,8 +821,13 @@ function getFilteredTrees() {
     var filtered = trees.slice();
     var fc = document.getElementById('filterComplexity').value;
     var fm = document.getElementById('filterMech').value;
+    var fs = document.getElementById('filterStatus').value;
     if (fc) filtered = filtered.filter(function(t) { return t.complexity === parseInt(fc); });
-    if (fm) filtered = filtered.filter(function(t) { return t.mechanization === fm; });
+    if (fm) filtered = filtered.filter(function(t) {
+        var m = t.mechanization;
+        return Array.isArray(m) ? m.indexOf(fm) !== -1 : m === fm;
+    });
+    if (fs) filtered = filtered.filter(function(t) { return (t.status || 'Uneseno') === fs; });
     return filtered;
 }
 function applyFilters() { renderTreeList(); }
