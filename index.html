@@ -79,6 +79,8 @@
             opacity: 0; pointer-events: none; transition: opacity 0.25s;
         }
         .modal-overlay.active { opacity: 1; pointer-events: all; }
+        .modal-overlay.placing-mode { pointer-events: none; background: transparent; }
+        .modal-overlay.placing-mode .modal { pointer-events: all; }
         .modal {
             background: white; border-radius: 12px; width: 520px; max-height: 90vh;
             overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.3);
@@ -526,6 +528,7 @@ function openAddModal() {
     document.getElementById('map').classList.add('placing');
     document.getElementById('placementHint').classList.add('show');
     document.getElementById('treeModal').classList.add('active');
+    document.getElementById('treeModal').classList.add('placing-mode');
 }
 
 function openEditModal(id) {
@@ -555,10 +558,12 @@ function openEditModal(id) {
     document.getElementById('map').classList.add('placing');
     document.getElementById('placementHint').classList.add('show');
     document.getElementById('treeModal').classList.add('active');
+    document.getElementById('treeModal').classList.add('placing-mode');
 }
 
 function closeModal() {
     document.getElementById('treeModal').classList.remove('active');
+    document.getElementById('treeModal').classList.remove('placing-mode');
     placingMode = false;
     document.getElementById('map').classList.remove('placing');
     document.getElementById('placementHint').classList.remove('show');
