@@ -393,14 +393,12 @@ const RATING_LABELS = ['', 'Jednostavno', 'Niska kompleksnost', 'Srednja komplek
 // ==================== MAP INIT ====================
 const map = L.map('map', { zoomControl: true }).setView([45.8303, 15.9848], 17);
 
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 22, attribution: '&copy; OpenStreetMap contributors'
-}).addTo(map);
-
 const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 22, attribution: '&copy; Esri' });
+satellite.addTo(map);
+
 L.control.layers({
-    "Karta": L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 22 }),
-    "Satelit": satellite
+    "Satelit": satellite,
+    "Karta": L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 22, attribution: '&copy; OpenStreetMap contributors' })
 }).addTo(map);
 
 map.on('click', function(e) {
