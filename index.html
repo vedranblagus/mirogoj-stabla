@@ -126,6 +126,15 @@
         .image-upload-area.has-image { padding: 8px; }
         .image-upload-area img { max-width: 100%; max-height: 200px; border-radius: 6px; }
         .image-upload-area input { display: none; }
+        .image-thumbs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+        .image-thumb { position: relative; display: inline-block; }
+        .image-thumb img { width: 80px; height: 80px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); }
+        .image-thumb .remove-img { position: absolute; top: -6px; right: -6px; background: var(--danger); color: white; border: none; border-radius: 50%; width: 20px; height: 20px; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; line-height: 1; }
+        .detail-gallery { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+        .detail-gallery img { width: 120px; height: 90px; object-fit: cover; border-radius: 8px; cursor: pointer; border: 1px solid var(--border); transition: transform 0.2s; }
+        .detail-gallery img:hover { transform: scale(1.05); }
+        .lightbox { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 5000; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+        .lightbox img { max-width: 90vw; max-height: 90vh; border-radius: 8px; }
         .detail-panel { padding: 20px; }
         .detail-panel .detail-image { width: 100%; border-radius: 8px; margin-bottom: 16px; }
         .detail-panel h3 { margin-bottom: 12px; color: var(--primary-dark); }
@@ -303,12 +312,12 @@
                     </select>
                 </div>
                 <div class="form-group">
-                    <label>Fotografija</label>
+                    <label>Fotografije (max 5MB po slici)</label>
                     <div class="image-upload-area" id="imageUpload" onclick="document.getElementById('imageInput').click()">
-                        <input type="file" id="imageInput" accept="image/*" onchange="handleImageUpload(event)">
+                        <input type="file" id="imageInput" accept="image/*" multiple onchange="handleImageUpload(event)">
                         <div id="imagePreview">
                             <div style="font-size:2rem;margin-bottom:8px;">&#128247;</div>
-                            <div style="color:var(--text-muted);font-size:0.85rem;">Kliknite za odabir slike (max 800KB)</div>
+                            <div style="color:var(--text-muted);font-size:0.85rem;">Kliknite za odabir slika (max 5MB po slici)</div>
                         </div>
                     </div>
                 </div>
@@ -400,7 +409,7 @@ let editingTreeId = null;
 let placingMode = false;
 let tempLatLng = null;
 let currentRating = 0;
-let currentImage = null;
+let currentImages = [];
 let markers = {};
 let unsubTrees = null;
 let unsubAudit = null;
@@ -537,8 +546,8 @@ function openAddModal() {
     document.getElementById('treeStatus').value = 'Uneseno';
     document.getElementById('coordDisplay').textContent = 'Kliknite na kartu za odabir lokacije';
     setRating(0);
-    currentImage = null;
-    document.getElementById('imagePreview').innerHTML = '<div style="font-size:2rem;margin-bottom:8px;">&#128247;</div><div style="color:var(--text-muted);font-size:0.85rem;">Kliknite za odabir slike (max 800KB)</div>';
+    currentImages = [];
+    renderImagePreviews();
     document.getElementById('imageUpload').classList.remove('has-image');
     tempLatLng = null;
     placingMode = true;
@@ -564,15 +573,16 @@ function openEditModal(id) {
     document.getElementById('coordDisplay').textContent = tree.lat.toFixed(6) + ', ' + tree.lng.toFixed(6);
     setRating(tree.complexity || 0);
     tempLatLng = L.latLng(tree.lat, tree.lng);
-    if (tree.image) {
-        currentImage = tree.image;
-        document.getElementById('imagePreview').innerHTML = '<img src="' + tree.image + '" alt="Stablo">';
-        document.getElementById('imageUpload').classList.add('has-image');
+    // Support both old single image and new images array
+    if (tree.images && Array.isArray(tree.images)) {
+        currentImages = tree.images.slice();
+    } else if (tree.image) {
+        currentImages = [tree.image];
     } else {
-        currentImage = null;
-        document.getElementById('imagePreview').innerHTML = '<div style="font-size:2rem;margin-bottom:8px;">&#128247;</div><div style="color:var(--text-muted);font-size:0.85rem;">Kliknite za odabir slike</div>';
-        document.getElementById('imageUpload').classList.remove('has-image');
+        currentImages = [];
     }
+    renderImagePreviews();
+    document.getElementById('imageUpload').classList.toggle('has-image', currentImages.length > 0);
     placingMode = true;
     document.getElementById('map').classList.add('placing');
     document.getElementById('placementHint').classList.add('show');
@@ -608,7 +618,8 @@ async function saveTree() {
         mechanization: selectedMech,
         mechNote: document.getElementById('treeMechNote').value.trim(),
         status: document.getElementById('treeStatus').value,
-        image: currentImage || null,
+        images: currentImages.length > 0 ? currentImages : [],
+        image: currentImages.length > 0 ? currentImages[0] : null,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
         updatedBy: currentUser
     };
@@ -705,28 +716,55 @@ function setRating(val) {
 
 // ==================== IMAGE ====================
 function handleImageUpload(event) {
-    var file = event.target.files[0];
-    if (!file) return;
-    if (file.size > 2 * 1024 * 1024) { showToast('Slika ne smije biti veca od 2MB!'); return; }
-    // Compress image
-    var reader = new FileReader();
-    reader.onload = function(e) {
-        var img = new Image();
-        img.onload = function() {
-            var canvas = document.createElement('canvas');
-            var maxW = 800, maxH = 600;
-            var w = img.width, h = img.height;
-            if (w > maxW) { h = h * maxW / w; w = maxW; }
-            if (h > maxH) { w = w * maxH / h; h = maxH; }
-            canvas.width = w; canvas.height = h;
-            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-            currentImage = canvas.toDataURL('image/jpeg', 0.6);
-            document.getElementById('imagePreview').innerHTML = '<img src="' + currentImage + '" alt="Preview">';
-            document.getElementById('imageUpload').classList.add('has-image');
+    var files = Array.from(event.target.files);
+    if (!files.length) return;
+    files.forEach(function(file) {
+        if (file.size > 5 * 1024 * 1024) { showToast('Slika "' + file.name + '" prelazi 5MB!'); return; }
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            var img = new Image();
+            img.onload = function() {
+                var canvas = document.createElement('canvas');
+                var maxW = 1200, maxH = 900;
+                var w = img.width, h = img.height;
+                if (w > maxW) { h = h * maxW / w; w = maxW; }
+                if (h > maxH) { w = w * maxH / h; h = maxH; }
+                canvas.width = w; canvas.height = h;
+                canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                currentImages.push(canvas.toDataURL('image/jpeg', 0.7));
+                renderImagePreviews();
+                document.getElementById('imageUpload').classList.add('has-image');
+            };
+            img.src = e.target.result;
         };
-        img.src = e.target.result;
-    };
-    reader.readAsDataURL(file);
+        reader.readAsDataURL(file);
+    });
+    event.target.value = '';
+}
+
+function removeImage(index) {
+    currentImages.splice(index, 1);
+    renderImagePreviews();
+    document.getElementById('imageUpload').classList.toggle('has-image', currentImages.length > 0);
+}
+
+function renderImagePreviews() {
+    var container = document.getElementById('imagePreview');
+    if (currentImages.length === 0) {
+        container.innerHTML = '<div style="font-size:2rem;margin-bottom:8px;">&#128247;</div><div style="color:var(--text-muted);font-size:0.85rem;">Kliknite za odabir slika (max 5MB po slici)</div>';
+    } else {
+        container.innerHTML = '<div class="image-thumbs">' + currentImages.map(function(img, i) {
+            return '<div class="image-thumb"><img src="' + img + '" alt="Slika ' + (i+1) + '"><button class="remove-img" onclick="event.stopPropagation();removeImage(' + i + ')">×</button></div>';
+        }).join('') + '</div><div style="color:var(--text-muted);font-size:0.78rem;margin-top:6px;">Kliknite za dodavanje još slika</div>';
+    }
+}
+
+function openLightbox(src) {
+    var lb = document.createElement('div');
+    lb.className = 'lightbox';
+    lb.innerHTML = '<img src="' + src + '" alt="Fotografija">';
+    lb.onclick = function() { document.body.removeChild(lb); };
+    document.body.appendChild(lb);
 }
 
 // ==================== RENDER ====================
@@ -794,8 +832,13 @@ function showDetail(id) {
     var createdDate = tree.createdAt ? formatDateTime(tree.createdAt.toDate ? tree.createdAt.toDate() : new Date(tree.createdAt)) : '-';
     var updatedDate = tree.updatedAt ? formatDateTime(tree.updatedAt.toDate ? tree.updatedAt.toDate() : new Date(tree.updatedAt)) : '-';
 
+    var allImages = (tree.images && Array.isArray(tree.images)) ? tree.images : (tree.image ? [tree.image] : []);
+    var galleryHtml = allImages.length > 0 ? '<div class="detail-gallery">' + allImages.map(function(img) {
+        return '<img src="' + img + '" alt="' + esc(tree.name) + '" onclick="openLightbox(\'' + img.replace(/'/g, "\\'") + '\')">';
+    }).join('') + '</div>' : '';
+
     document.getElementById('treeDetail').innerHTML = '<div class="detail-panel">' +
-        (tree.image ? '<img class="detail-image" src="' + tree.image + '" alt="' + esc(tree.name) + '">' : '') +
+        galleryHtml +
         '<h3>' + esc(tree.name) + '</h3>' +
         (tree.species ? '<div class="detail-field"><span class="label">VRSTA STABLA</span><div class="value">\uD83C\uDF3F ' + esc(tree.species) + '</div></div>' : '') +
         '<div class="detail-field"><span class="label">LOKACIJA</span><div class="value" style="font-family:monospace;">\uD83D\uDCCD ' + tree.lat.toFixed(6) + ', ' + tree.lng.toFixed(6) + '</div></div>' +
